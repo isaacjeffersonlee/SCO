@@ -1,0 +1,9 @@
+README.md
+setup.py
+sco/__init__.py
+sco/sorting.py
+sco.egg-info/PKG-INFO
+sco.egg-info/SOURCES.txt
+sco.egg-info/dependency_links.txt
+sco.egg-info/requires.txt
+sco.egg-info/top_level.txt
