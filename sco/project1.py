@@ -13,86 +13,6 @@ sns.set()
 
 C2B = {"A": 0, "C": 1, "G": 2, "T": 3}
 
-# WRITEUP
-## Part 1
-### 1.
-"""
-Part1 uses a mixture of insertion sort and binary search to sort the input
-list Xin in non-decreasing order.
-It first sorts the first section of the list (up to and including the istar^th index)
-using insertion sort. Then the remaining unsorted right side of the list is sorted
-using binary search. This works by finding the correct position/index in the sorted left side
-for each element in the unsorted right side, using binary search, and then moving the element
-to this position, bumping up the other elements to make room.
-
-When it comes to computational complexity, we first consider the insertion sort part.
-Clearly insertion sort is $O(n^2)$ in the worst case, i.e when the list is in reverse order,
-since we will have 1 + 2 + 3 + ... + n - 1 comparisons = $n(n-1)/2$ i.e $O(n^2)$, where $n$ is
-the length of the list. Of course in this case $n = istar + 1$ and therefore we have
-$O(\text{istar}^2)$ worst-case and average-case time complexity for the first half (O(istar^2) for best case), and O(N) memory complexity.
-Then for the second part of the algorithm, i.e the binary search part, we have
-N - (istar + 1) elements to find a home for amongst istar + 1 elements, using binary search.
-So therefore we have O(log(istar + 1) * (N - istar + 1)) = O(Nlog(istar) - istar log(istar)) worst case time complexity.
-
-So overall we have O((N - istar)log(istar) + istar^2) worst-case time complexity and O(N) memory complexity.
-Using this we see that istar should be as small as possible, because the squared term will dominate
-the overall complexity for larger istar.
-"""
-
-### 2.
-"""
-So the in order to investigate the trends in wall time as a function of istar and N,
-we fix either istar or N and then vary the other. For each combination of N and istar
-we run part1 with a randomized list of integers of length N and measure the wall time
-that the function took to run (end_time - start_time, with time.perf_counter()).
-We do this num_runs=10 times for each combination of istar and N and then take the
-average time, so as to dampen the effect of any anomalous results. Then
-we plot the dependent variable on the y-axis (istar or N) and the independent variable (walltime in seconds)
-on the x-axis.
-
-In the first plot, we see that istar is the independent variable and we have kept N fixed at 1000.
-Our results indicate that wall time is a quadratic function of istar, with y-intercept, i.e
-with N held fixed, part1 has time complexity $O(istar^2)$. This agrees exactly with our
-theoretical time complexity result from question 1. Nice.
-
-Then in our second plot we plot the wall time as a function of N, varying N from 0 to 1000.
-We use three values of istar, as a function of N. istar = 0, istar = N // 2 and istar = N - 1.
-The plot for istar=0 seems to have a linear relationship in N. i.e when istar=0 we have O(N).
-This agrees with our theoretical result, since O((N - 0)log(0) + 0^2) = O(N).
-Then when istar = N // 2 we see what looks like slightly quadratic, perhaps NLog(N) behaviour.
-This also agrees with our theoretical result, since when istar = N//2 we have O(Nlog(N) + N^2) complexity.
-Finally for istar = N -1 we observe quadratic behaviour in N. This also agrees with our theoretical
-result, since we have O((N - istar)log(istar) + istar^2) = O(log(N - 1) + (N - 1)^2) so clearly the quadratic
-term will dominate.
-"""
-
-
-## Part 2
-### 2.
-"""
-We implement a multi-pattern version of Rabin-Karp.
-First we find all contiguous length m subsequences of T.
-Then we pre-compute the hashes of these subsequences and store the results
-in a hash table, where the keys are given by the hashes and the values are the
-index of the subsequence in the list of m-length contiguou subsequences of T.
-Then we convert the input sequence S into base 4 and define this to be X.
-Then we loop over each index in X, i,  and check if the hash of the contiguous subsequence
-X[i:i+m] is found in our hashtable. We do this efficiently by using a rolling
-hash function, so we re-use the previous calculations to reduce time complexity.
-Then if the hashes match, we check that the strings match (to handle hash collisions).
-If they match, we append the current index to the sublist corresponding to the current m-length subsequence.
-
-So concerning computational complexity, if l is the length of T, then in the worst
-case clearly we will have O(l) m-length subsequences. This means that building
-our hashtable will take O(l * m). Then in the worst case, when we have lot's of 
-collisions, the main loop will run in O(lnm) so overall worst case is O(lnm + lm) = O(lnm).
-But this algorithm is efficient because in the average case we will have many near misses,
-which means we can avoid many string equivalence checks, thus reducing complexity from O(m) to O(1)
-for each check,
-since checking if a hash exists in a hash table (python dict in this case)
-only takes O(1). Therefore overall average complexity is reduce to O(l(m + n)).
-"""
-
 
 # ===== Code for Part 1=====#
 def part1(Xin, istar):
@@ -178,7 +98,7 @@ def part1_time(inputs=None):
 
     ax[1].set_xlabel("N")
     ax[1].set_ylabel("wall time (seconds)")
-    ax[1].set_title(f"wall times for different N values")
+    ax[1].set_title("wall times for different N values")
     plt.suptitle("part1 wall times")
     plt.show()
 
@@ -205,22 +125,21 @@ def part2_naive(S, T, m):
 
     # First get all unique m-length contiguous substrings of T
     # Time complexity: O(l)
-    subsequences = []
+    subseqs = []
     for i in range(l - m + 1):
         t = T[i : i + m]
-        if t not in subsequences:  # O(len(subsequences))
-            subsequences.append(t)
+        if t not in subseqs:  # O(len(subsequences))
+            subseqs.append(t)
 
-    L = []
+    d = {P: [] for P in subseqs}
     # Match subsequences of T against S
     # Time complexity: O(l * nm)
-    for subsequence in subsequences:
-        subsequence_L = []
+    for P in subseqs:
         for i in range(n - m + 1):  # O(n)
-            if S[i : i + m] == subsequence:  # O(m)
-                subsequence_L.append(i)
-        L.append(subsequence_L)
+            if S[i : i + m] == P:  # O(m)
+                d[P].append(i)
 
+    L = [d[T[i : i + m]] for i in range(l - m + 1)]
     return L
 
 
@@ -245,7 +164,7 @@ def part2(S, T, m):
     Input:
     S,T: length-n and length-l gene sequences provided as strings
 
-    Rabin-Karp Implementation.
+    Multi-pattern Rabin-Karp Implementation.
 
     Output:
     L: A list of lists where L[i] is a list containing all locations
@@ -256,57 +175,69 @@ def part2(S, T, m):
     if m > len(T) or m > n:
         return []
 
-    # First we find all contiguous length m subsequences of T.
+    # First we find all unique contiguous length m subsequences of T.
     subseqs = []
-    # O(l)
     for i in range(l - m + 1):
-        t = T[i : i + m]
-        if t not in subseqs:
+        t = T[i:i + m]
+        if t not in subseqs:  # Uniqueness check, preserving ordering.
             subseqs.append(t)
 
-    # Convert input S into base 4
-    X = char2base4(S)  # O(n)
-    base = 4
-    q = 7919
-    L = []
-    # O(l * m)
-    hashtable = {heval(char2base4(P), base, q): k for k, P in enumerate(subseqs)}
+    # Create a map that maps each hash to a list of subsequence numbers, k
+    # which have that hash. E.g if T = "CATCATCAT" and m = 3 then the unique
+    # subsequences in T are given by: "CAT" => k = 0, "ATC" => k = 1, "TCA" => k = 2.
+    # But of course we can have hash collisions, i.e suppose our hash for
+    # "CAT" was the same as the hash for "ATC" and was equal to h, and then the hash
+    # for "TCA" is h'. So hash_to_k_map will map each unique hash to a list of matching
+    # indices. E.g in this example we have: hash_to_k_map = {h: [0, 1], h': [2]}.
+    base, q = 4, 7919
+    hash_to_k_map = {}
     for k, P in enumerate(subseqs):
-        i = 0
-        imatch = []
-        hi = heval(X[:m], base, q)  # O(m)
-        if hashtable.get(hi, -1) == k:
-            if S[i : i + m] == P:  # O(m)
-                imatch.append(i)
-
-        bm = (4**m) % q
-        for i in range(1, n - m + 1):
-            # Update rolling hash
-            hi = (hi * 4 - int(X[i - 1]) * bm + int(X[i - 1 + m])) % q
-            if hashtable.get(hi, -1) == k:
-                if S[i : i + m] == P:
-                    imatch.append(i)
-
-        L.append(imatch)
-
-    return L
+        h = heval(char2base4(P), base, q)
+        if h not in hash_to_k_map:
+            hash_to_k_map[h] = [k]
+        else:  # Handle collisions
+            hash_to_k_map[h].append(k)
+    # Appending -1 to X is a workaround to avoid indexing errors for hi, without
+    # having to use branching logic, which would be less efficient.
+    X = char2base4(S)
+    X.append(-1)
+    bm = (4**m) % q
+    # Initialize a map from each unique subsequence in T to a list
+    # of indices in S where that subsequence appears.
+    subseq_to_i_map = {P: [] for P in subseqs}
+    hi = heval(X[:m], base, q)
+    for i in range(n - m + 1):
+        if hash_to_k_map.get(hi, -1) != -1:
+            possible_k = hash_to_k_map[hi]
+            for k in possible_k:
+                P = subseqs[k]
+                if S[i:i + m] == P:
+                    subseq_to_i_map[P].append(i)
+                    break
+        # Update rolling hash
+        hi = (hi * 4 - X[i] * bm + X[i + m]) % q
+    # Finally we apply our map over all (not necessarily unique) contiguous
+    # length m subsequences of T, giving us L, which we return.
+    # Doing it like this means we don't have to repeat calculations
+    # for duplicate contiguous subsequences of T.
+    return [subseq_to_i_map[T[i:i + m]] for i in range(l - m + 1)]
 
 
 if __name__ == "__main__":
-    # with open("test_sequence.txt", "r") as f:
-    #     sequence = f.read()
+    with open("test_sequence.txt", "r") as f:
+        sequence = f.read()
 
-    # S = "GTCATGGCTGCATAG"
-    # T = "TCATGCAT"
-    # m = 10  # => 'TCA', 'CAT', 'ATG'
-    # start_time = time.perf_counter()
-    # naive_solution = part2_naive(S, T, m)
-    # end_time = time.perf_counter()
-    # print(f"Naive Time taken: {end_time - start_time:.10f}s")
-    # start_time = time.perf_counter()
-    # rk_solution = part2(S, T, m)
-    # end_time = time.perf_counter()
-    # print(f"Rabin-Karp Time taken: {end_time - start_time:.10f}s")
-    # print(f"Naive and Rabin-Karp Solutions Agree? {naive_solution == rk_solution}")
+    S = sequence[:40000]
+    T = sequence[:20000]
+    m = 1000
+    start_time = time.perf_counter()
+    naive_solution = part2_naive(S, T, m)
+    end_time = time.perf_counter()
+    print(f"Naive Time taken: {end_time - start_time:.10f}s")
+    start_time = time.perf_counter()
+    rk_solution = part2(S, T, m)
+    end_time = time.perf_counter()
+    print(f"Rabin-Karp Time taken: {end_time - start_time:.10f}s")
+    print(f"Naive and Rabin-Karp Solutions Agree? {naive_solution == rk_solution}")
 
-    part1_time()
+    # part1_time()
