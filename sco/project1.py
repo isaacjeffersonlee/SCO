@@ -192,7 +192,7 @@ def part2(S, T, m):
     X = char2base4(S)
     X.append(-1)
     bm = (4**m) % q
-    # Initialize a map from each unique subsequence in T to a list
+    # Populate the map from each unique subsequence in T to a list
     # of indices in S where that subsequence appears.
     hi = heval(X[:m], base, q)
     for i in range(n - m + 1):
