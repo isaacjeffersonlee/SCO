@@ -215,7 +215,7 @@ if __name__ == "__main__":
         sequence = f.read()
 
     S = sequence[:50000]
-    T = sequence[:10000]
+    T = sequence[:4000]
     m = 100
     start_time = time.perf_counter()
     naive_solution = part2_naive(S, T, m)
