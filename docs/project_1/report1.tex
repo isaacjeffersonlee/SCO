@@ -112,57 +112,27 @@ result, since we have $O((N - \text{istar})\log(\text{istar}) + \text{istar}^2 +
 We implement a multi-pattern version of Rabin-Karp.
 First we find all \textbf{unique} contiguous subsequences/substrings of $T$ of length $m$.
 (From now on we will refer to these simply as subsequences).
-Then we pre-compute the hashes for all of the subsequences
-and define a map which maps each unique hash to a list of the subsequence indices
-of the subsequences with corresponding hash. This is perhaps best demonstrated with an example.
-Suppose $T := \text{CATCATCATG}$ and  $m := 3$. Then the possible unique subsequences (preserving ordering)
-are  $\text{CAT}, \text{ATC}, \text{TCA}, \text{ATG}$. We define $k$ to be the index 
-of the subsequence in the list of unique (order preserved) subsequences of T.
-E.g  
-\begin{align*}
-    \text{CAT} &\implies k = 0, \\
-    \text{ATC} &\implies k = 1,\\
-    \text{TCA} &\implies k = 2,\\
-    \text{ATG} &\implies k = 3.
-\end{align*}
+We store these in a dictionary, which we refer to as the subsequence map.
+We initialize this with empty list values, which will populate later.
 
-Then suppose the hashes are as follows:
-\begin{align*}
-    h(\text{CAT}) &= 100, \\
-    h(\text{ATC}) &= 120,\\
-    h(\text{TCA}) &= 130,\\
-    h(\text{ATG})&= 100.
-\end{align*}
-Then our map would be:
-\[
-    \{100: [0, 3], 120: [1], 130: [2]\}
-.\]
-It would of course be simpler to just map each hash to each index (without the lists),
+Then we pre-compute the hashes for all of the subsequences, i.e keys of our subsequence map.
+of the subsequences with corresponding hash. We store these in another dictionary, which we refer
+to as our hash map. The values of this dictionary are lists of subsequences, (unique m-length slices of T)
+with corresponding hash.
+It would of course be simpler to just directly map each hash to each subsequence (without the lists),
 but since we can have hash collisions, (as demonstrated in the above example), we need
-to use lists.
-
-We will refer to this map as our \textit{hashtable}.
+to use lists. I.e different subsequences could have the same hash.
 
 Then we convert $S$ to base $4$, and define this to be $X$. We then loop over every
 possible starting index and calculate the rolling hash, using the Rabin-Karp method
 given in lectures. We then check if this hash exists in our hashtable, and
 if it does, we plug in the hash into our hashtable and get out the list of possible
-subsequence indices which correspond to the subsequences with matching hash.
-We then loop over each possible index, recover the subsequence and then check for a string match.
-(We do this to handle collisions). If we get a match, then we store this index.
+subsequences which correspond to the subsequences with matching hash.
+We then loop over each possible subsequence and check for a string match with $S[i:i+m]$.
+If we get a match, then we append $i$ to the list in our subsequence map with key equal to the matched hash.
 
-We store these indices in a second map/dictionary, which maps the unique subsequences to
-a list of their matched indices in $S$. For example, if we continue the above example
-with  $S := \text{TACATGCAT}$ then this map will look like:
-\[
-    \{\text{CAT}: [2, 6], \text{ATC}: [], \text{TCA}: [], \text{ATG}: [3]\}
-.\]
 Then finally, since the question asks for all subsequences of $T$, not just the unique ones,
-we apply our map to all of the m-length subsequences of $T$, to get $L$. E.g
-\begin{align*}
-    T &= \text{CATCATCATG}, \\
-    \implies L &= [[2, 6], [], [], [2, 6], [], [], [2, 6], [3]]
-\end{align*}
+we apply our subsequence map to all of the m-length subsequences of $T$, to get $L$. E.g
 
 This solution is efficient for multiple reasons. Firstly we have the obvious benefits from
 using Rabin-Karp rolling hashes over just string matching, reducing checking matches
@@ -173,16 +143,16 @@ Also by only considering \textbf{unique} subsequences in $T$, and building a map
 we also save a lot of time, meaning we don't have to waste time, re-checking matches
 for duplicate subsequences of $T$. 
 
-So in terms of complexity, firstly finding all unique subsequences of $T$ takes $O(l)$.
-Then when generating the hash table, calculating each hash takes $O(m)$, and we do this
+So in terms of complexity, firstly finding all unique subsequences of $T$ (building our subsequences map)
+takes $O(l - m)$. Then when generating the hash map, calculating each hash takes $O(m)$, and we do this
 for every unique m-length subsequence in $T$. In the worst case we could have $l - m + 1$
 unique subsequences and therefore building our hashtable will have $O((l - m + 1)m = O(lm - m^2)$
 worst-case time complexity. Then converting $S$ to base 4 will take $O(n)$.
 Then for the main loop, at each iteration we perform a hashtable lookup ($O(1)$)
-then we loop over each possible $k$ and check if $S[i:i+m] == \text{subsequences}[k]$.
+then we loop over each possible subsequence and check if $S[i:i+m] == \text{subseqs\_map}[h_i]$.
 As long as we use a big enough prime number, it should be pretty rare to get collisions
-in our subsequences hashes, so the majority of our possible k lists (values from our hashtable)
-will have length 1. So we don't need to be concerned about looping over each possible $k$ in our complexity calculations.
+in our subsequence hashes, so the majority of our possible subsequence lists (values from our subsequence map)
+will have length 1. So we don't need to be concerned about looping over each possible subsequence in our complexity calculations.
 Checking the string matches takes $O(m)$, so therefore our worst-case complexity for
 the main loop is $O((n - m + 1)m) = O(nm - m^2)$.
 
@@ -193,8 +163,8 @@ So combining everything we have worst-case runtime complexity $O(nm + lm - m^2)$
 Note that the average complexity should be much better, especially when have a lot
 of near misses. The average complexity will be closer to $O(n + lm - m^2)$.
 
-Then in terms of memory complexity, we are storing a list of unique subsequences and two dictionaries,
-all with length equal to the number of unique subsequences (assuming no hash collisions for subsequence hashes).
+Then in terms of memory complexity, we are storing the subseqs map and the hash map.
+These each have length equal to the number of unique subsequences (assuming no hash collisions for subsequence hashes).
 So clearly we have $O(l - m)$ worst case memory complexity.
 
 % -----------------------------------------------------------------------
