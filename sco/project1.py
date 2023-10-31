@@ -171,32 +171,22 @@ def part2(S, T, m):
     in S where the length-m sequence starting at T[i] can be found.
     """
     n, l = len(S), len(T)
+    base, q = 4, 7919
     # Handle Edge Cases
     if m > len(T) or m > n:
         return []
-
     # First we find all unique contiguous length m subsequences of T.
-    subseqs = []
-    for i in range(l - m + 1):
-        t = T[i:i + m]
-        if t not in subseqs:  # Uniqueness check, preserving ordering.
-            subseqs.append(t)
-
-    # Create a map that maps each hash to a list of subsequence numbers, k
-    # which have that hash. E.g if T = "CATCATCAT" and m = 3 then the unique
-    # subsequences in T are given by: "CAT" => k = 0, "ATC" => k = 1, "TCA" => k = 2.
-    # But of course we can have hash collisions, i.e suppose our hash for
-    # "CAT" was the same as the hash for "ATC" and was equal to h, and then the hash
-    # for "TCA" is h'. So hash_to_k_map will map each unique hash to a list of matching
-    # indices. E.g in this example we have: hash_to_k_map = {h: [0, 1], h': [2]}.
-    base, q = 4, 7919
-    hash_to_k_map = {}
-    for k, P in enumerate(subseqs):
+    # We map these to empty lists, which we will populate later.
+    subseqs_map = {T[k:k + m]: [] for k in range(l - m + 1)}
+    # Create a map that maps each hash to a list of subsequences of T with
+    # corresponding hash.
+    hash_map = {}
+    for P in subseqs_map.keys():
         h = heval(char2base4(P), base, q)
-        if h not in hash_to_k_map:
-            hash_to_k_map[h] = [k]
+        if h not in hash_map:
+            hash_map[h] = [P]
         else:  # Handle collisions
-            hash_to_k_map[h].append(k)
+            hash_map[h].append(P)
     # Appending -1 to X is a workaround to avoid indexing errors for hi, without
     # having to use branching logic, which would be less efficient.
     X = char2base4(S)
@@ -204,15 +194,12 @@ def part2(S, T, m):
     bm = (4**m) % q
     # Initialize a map from each unique subsequence in T to a list
     # of indices in S where that subsequence appears.
-    subseq_to_i_map = {P: [] for P in subseqs}
     hi = heval(X[:m], base, q)
     for i in range(n - m + 1):
-        if hash_to_k_map.get(hi, -1) != -1:
-            possible_k = hash_to_k_map[hi]
-            for k in possible_k:
-                P = subseqs[k]
+        if hi in hash_map:
+            for P in hash_map[hi]:
                 if S[i:i + m] == P:
-                    subseq_to_i_map[P].append(i)
+                    subseqs_map[P].append(i)
                     break
         # Update rolling hash
         hi = (hi * 4 - X[i] * bm + X[i + m]) % q
@@ -220,16 +207,16 @@ def part2(S, T, m):
     # length m subsequences of T, giving us L, which we return.
     # Doing it like this means we don't have to repeat calculations
     # for duplicate contiguous subsequences of T.
-    return [subseq_to_i_map[T[i:i + m]] for i in range(l - m + 1)]
+    return [subseqs_map[T[i : i + m]] for i in range(l - m + 1)]
 
 
 if __name__ == "__main__":
     with open("test_sequence.txt", "r") as f:
         sequence = f.read()
 
-    S = sequence[:40000]
-    T = sequence[:20000]
-    m = 1000
+    S = sequence[:50000]
+    T = sequence[:10000]
+    m = 100
     start_time = time.perf_counter()
     naive_solution = part2_naive(S, T, m)
     end_time = time.perf_counter()
