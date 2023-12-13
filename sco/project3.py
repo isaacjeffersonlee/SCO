@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from scipy.integrate import solve_ivp
-from scipy.linalg import solve_banded
+from scipy.linalg import eigh, solve_banded
 from scipy.spatial.distance import pdist
 from scipy import sparse
 import time
@@ -54,7 +54,6 @@ def plot_stacked_fields(nrows, ncols, lat, lon, u, stepsize=1, levels=20):
     # Adjust the vertical space (hspace) between subplots
     plt.subplots_adjust(hspace=1.5)
     plt.suptitle("Wind speed across time")
-    plt.show()
 
 
 def plot_field_animated(lat, lon, u, levels=20):
@@ -87,17 +86,37 @@ def plot_field_animated(lat, lon, u, levels=20):
     plt.show()
 
 
-def pca(X, n_components=None):
-    n, m = X.shape
+def pca(X):
+    m, n = X.shape
     X = X - X.mean(axis=0)
-    assert np.allclose(X.mean(axis=0), np.zeros(m))
-    C = np.dot(X.T, X) / (n - 1)
-    eigen_vals, eigen_vecs = np.linalg.eig(C)
-    explained_variances = eigen_vals / sum(eigen_vals)
-    return X @ eigen_vecs[:, :n_components], explained_variances[:n_components]
+    C = np.cov(X, rowvar=False)
+    evals, evecs = eigh(C)
+    idx = np.argsort(evals)[::-1]
+    evecs, evals = evecs[:, idx], evals[idx]
+    explained_variance_ratio = evals / np.sum(evals)
+    return X @ evecs, explained_variance_ratio
 
 
-def plot_explained_variances(u):
+def pca_svd(X):
+    def _svd_flip(U, Vt):
+        """Sign correction to ensure deterministic output from SVD."""
+        max_abs_cols = np.argmax(np.abs(U), axis=0)
+        signs = np.sign(U[max_abs_cols, range(U.shape[1])])
+        U *= signs
+        Vt *= signs[:, np.newaxis]
+        return U, Vt
+
+    n, m = X.shape
+    X = X - np.mean(X, axis=0)
+    U, S, Vt = np.linalg.svd(X, full_matrices=False)
+    U, Vt = _svd_flip(U, Vt)
+    explained_variance = (S**2) / (n - 1)
+    total_var = explained_variance.sum()
+    explained_variance_ratio = explained_variance / total_var
+    return X @ Vt.T, explained_variance_ratio
+
+
+def plot_explained_variances_through_space(u):
     explained_longitudinal_variances = [pca(u[t, :, :])[1] for t in range(365)]
     plt.title(
         f"Explained Variance for each longitudinal component across time ({len(explained_longitudinal_variances[0])})"
@@ -114,14 +133,45 @@ def plot_explained_variances(u):
     plt.xlabel("t")
     plt.ylabel("Explained Latitudinal Variance %")
     plt.plot(explained_latitudinal_variances)
-    plt.show()
+
+
+def plot_explained_variance_through_time(u, lon, lat):
+    _, explained_variance = pca(u.reshape(365, 16 * 144).T)
+    fig, ax = plt.subplots()
+    ax.plot(np.cumsum(explained_variance), marker="x", ms=5.0)
+    ax.set_xlabel("n")
+    ax.set_ylabel("Cumulative explained variance")
+    ax.set_title("Cumulative Explained Variance of first n PC through Time")
+
+
+def plot_first_n_principal_components_through_time(u, lon, lat, n):
+    Z, _ = pca(u.reshape(365, 16 * 144).T)
+    nrows = ncols = int(np.sqrt(n))
+    fig, ax = plt.subplots(nrows=nrows, ncols=ncols)
+    c = 0
+    for i in range(nrows):
+        for j in range(ncols):
+            zc = -Z[:, c].reshape((16, 144))  # Sign of PC is arbitrary
+            ax[i, j].contourf(lon, lat, zc, 200)
+            if j != 0:
+                ax[i, j].set_yticks([])  # Turn off y ticks for non first columns
+            if j == 0:
+                ax[i, j].set_ylabel("Latitude")
+            if i != nrows - 1:
+                ax[i, j].set_xticks([])  # Turn off xticks for non last rows
+            if i == nrows - 1:
+                ax[i, j].set_xlabel("Longitude")
+            ax[i, j].set_title(f"PC: {c}")
+            c += 1
+
+    plt.subplots_adjust(hspace=1.2)
+    plt.suptitle(f"First {n} principal components")
 
 
 def plot_fourier_spectra(lat, lon, u):
-    C = np.sum(np.log(np.abs(np.fft.fftshift(np.fft.fft2(u))) ** 2), axis=0)
+    C = np.log(np.sum(np.abs(np.fft.fftshift(np.fft.fft2(u))) ** 2, axis=0))
     plt.figure()
     plt.contourf(lon, lat, C, 200)
-    plt.show()
 
 
 def part1():  # add input if needed
@@ -135,9 +185,11 @@ def part1():  # add input if needed
     lon = d["lon"]
     u = d["u"]
     # -------------------------------------#
-    # plot_field_animated(lat, lon, u, levels=20)
+    plot_field_animated(lat, lon, u, levels=20)
     plot_stacked_fields(10, 5, lat, lon, u, levels=20, stepsize=1)
-    plot_explained_variances(u)
+    plot_explained_variances_through_space(u)
+    plot_explained_variance_through_time(u, lon, lat)
+    plot_first_n_principal_components_through_time(u, lon, lat, n=100)
     plot_fourier_spectra(lat, lon, u)
     plt.show()
 
@@ -191,58 +243,27 @@ def part2(f, method=2):
     return fI  # modify as needed
 
 
-def plot_interpolation_results(f, xg, ygI):
-    levels = 100
-    fI_1 = part2(f, method=1)
-    fI_2 = part2(f, method=2)
-    fig, ax = plt.subplots(nrows=2)
-    contour1 = ax[0].contourf(xg, ygI, fI_1, levels)
-    ax[0].set_xlabel("$x_j$")
-    ax[0].set_ylabel("$\\tilde{y}_i$")
-    ax[0].set_title(f"Interpolation Results for method 1")
-    contour2 = ax[1].contourf(xg, ygI, fI_2, levels)
-    ax[1].set_xlabel("$x_j$")
-    ax[1].set_ylabel("$\\tilde{y}_i$")
-    ax[1].set_title(f"Interpolation Results for method 2")
+def plot_implicit_wavenumber_analysis(a, b, c, alpha, beta):
+    kh = np.linspace(0, np.pi, 1000)
+    method_1_kh_prime = np.sin(kh)
+    A = a * np.sin(kh) + (b / 2) * np.sin(2 * kh) + (c / 3) * np.sin(3 * kh)
+    B = 1 + 2 * alpha * np.cos(kh) + 2 * beta * np.cos(2 * kh)
+    method_2_kh_prime = A / B
+    fig, ax = plt.subplots()
+    ax.plot(kh, kh, label="exact")
+    ax.plot(kh, method_1_kh_prime, label="method 1")
+    ax.plot(kh, method_2_kh_prime, label="method 2")
+    ax.set_xlabel("kh")
+    ax.set_ylabel("kh'")
+    ax.legend()
 
 
-def part2_analyze():
-    d = np.load("data1.npz")
-    lat = d["lat"]
-    lon = d["lon"]
-    u = d["u"]
-    t = 0
-    f = u[t]  # TODO: Randomize f so we can scale arbitrary m and n
-    m, n = f.shape  # arbitrary grid sizes
-    y = np.linspace(0, 1, m)
-    x = np.linspace(0, 1, n)
-    xg, yg = np.meshgrid(x, y)
-    dy = y[1] - y[0]
-    yI = y[:-1] + dy / 2  # grid for interpolated data
-    xg, ygI = np.meshgrid(x, yI)
-
-    # Measuring how close the interpolations are for method 1 and method 2
-    # plot_interpolation_results(f, xg, ygI)
-    print("Max u:", np.max(u))
-    print("Min u:", np.min(u))
-    print("Mean std:", np.mean(np.std(u, axis=0)))
-    MSE = []
-    for t in range(365):
-        f = u[t]
-        fI_1 = part2(f, method=1)
-        fI_2 = part2(f, method=2)
-        assert fI_1.size == fI_2.size
-        MSE.append((1 / fI_1.size) * np.sum((fI_1 - fI_2) ** 2))
-
-    avg_MSE = np.mean(MSE)
-    print(f"Average MSE between method 1 and method 2: {avg_MSE:.4f}")
-
+def plot_walltime_vs_m():
     # Asymptotic time complexity experimental analysis
     m_vals = range(10, 30_000, 1000)
     times = {"method_1": [], "method_2": []}
-    from tqdm import tqdm
 
-    for m in tqdm(m_vals):
+    for m in m_vals:
         n = m  # "n is of the same magnitude as m."
         f = np.random.rand(m, n)
         start_1 = time.perf_counter()
@@ -254,14 +275,56 @@ def part2_analyze():
         end_2 = time.perf_counter()
         times["method_2"].append(end_2 - start_2)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(20, 10))
+    coeffs_1 = np.polyfit(m_vals, times["method_1"], 2)
+    a_1, b_1, c_1 = coeffs_1
+    f_1 = np.poly1d(coeffs_1)
+    z_1 = f_1(m_vals)
+    coeffs_2 = np.polyfit(m_vals, times["method_2"], 2)
+    a_2, b_2, c_2 = coeffs_2
+    f_2 = np.poly1d(coeffs_2)
+    z_2 = f_2(m_vals)
+
     ax.plot(m_vals, times["method_1"], label="Method 1", marker="o")
+    ax.plot(
+        m_vals,
+        z_1,
+        label=f"Method 1 fitted quadratic: ${a_1:.10f}m^2 + {b_1:.10f}m + {c_1:.10f}$",
+    )
     ax.plot(m_vals, times["method_2"], label="Method 2", marker="x")
-    ax.set_xlabel("m")  # Replace 'm_vals' with your actual x-axis label
-    ax.set_ylabel(
-        "Wall Time (seconds)"
-    )  # Replace 'Time (seconds)' with your actual y-axis label
+    ax.plot(
+        m_vals,
+        z_2,
+        label=f"Method 2 fitted quadratic: ${a_2:.10f}m^2 + {b_2:.10f}m + {c_2:.10f}$",
+    )
+    ax.set_xlabel("m")
+    ax.set_ylabel("Wall Time (seconds)")
     ax.legend()
+
+
+def part2_analyze():
+    d = np.load("data1.npz")
+    # lat = d["lat"]
+    # lon = d["lon"]
+    # u = d["u"]
+    # t = 0
+    # f = u[t]
+    # m, n = f.shape  # arbitrary grid sizes
+    # y = np.linspace(0, 1, m)
+    # x = np.linspace(0, 1, n)
+    # xg, yg = np.meshgrid(x, y)
+    # dy = y[1] - y[0]
+    # yI = y[:-1] + dy / 2  # grid for interpolated data
+    # xg, ygI = np.meshgrid(x, yI)
+
+    # Wavenumber analysis
+    alpha = 0.3
+    beta = 0.0
+    a = 1.5
+    b = 0.1
+    c = 0.0
+    plot_implicit_wavenumber_analysis(a, b, c, alpha, beta)
+    # plot_walltime_vs_m()
 
     plt.show()
 
@@ -324,7 +387,7 @@ def part3q1(y0, alpha, beta, b, c, tf=200, Nt=800, err=1e-6, method="RK45"):
     return tarray, yarray
 
 
-def part3_analyze(display_1=True, display_2=True, display_3=True):
+def part3_analyze(display_1=False, display_2=False, display_3=False):
     """
     Part 3 question 1: Analyze dynamics generated by system of ODEs
     """
@@ -378,9 +441,9 @@ def part3_analyze(display_1=True, display_2=True, display_3=True):
         delta_t = 25
         explained_variances = []
         t_vals = range(0, tf, delta_t)
-        explained_variances = [pca(u[t:t+delta_t, :])[1] for t in t_vals]
+        explained_variances = [pca(u[t : t + delta_t, :])[1] for t in t_vals]
         plt.title(
-            f"Explained Variance between times $i$ and $i+{delta_t}$"
+            f"Explained Variance between times $i*{delta_t}$ and $i*{delta_t}+{delta_t}$"
         )
         plt.xlabel("i")
         plt.ylabel("Explained Variance")
@@ -391,6 +454,7 @@ def part3_analyze(display_1=True, display_2=True, display_3=True):
     if display_3:
         D = pdist(u)
         eps_vals = np.linspace(np.min(D), np.max(D), num=100)[::-1]
+        print(eps_vals)
         C_vals = []
         for i, eps in enumerate(eps_vals):
             D = D[D < eps]
@@ -434,6 +498,7 @@ def part3q2(x, c=1.0):
     k = 40 * np.pi / L
     a0 = np.linspace(0, L, n)
     A0 = np.sqrt(1 - k**2) * np.exp(1j * a0)
+    y0 = np.zeros(2*n)
     y0[:n] = 1 + 0.2 * np.cos(4 * k * a0) + 0.3 * np.sin(7 * k * a0) + 0.1 * A0.real
 
     # Compute solution
@@ -455,3 +520,4 @@ def part3q2(x, c=1.0):
 
 if __name__ == "__main__":
     x = None  # Included so file can be imported
+    part2_analyze()
